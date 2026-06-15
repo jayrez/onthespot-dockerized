@@ -59,11 +59,17 @@ def spotify_get_oauth_token():
         if resp.status_code != 200:
             logger.error(f"[OAUTH] Failed to get access token: {resp.status_code} - {resp.text}")
             return None
-        data = resp.json()
-        _oauth_token_cache['access_token'] = data['access_token']
+        try:
+            data = resp.json()
+            access_token = data['access_token']
+            expires_in = data.get('expires_in', 3600)
+        except (ValueError, KeyError) as e:
+            logger.error(f"[OAUTH] Malformed token response: {str(e)}")
+            return None
+        _oauth_token_cache['access_token'] = access_token
         _oauth_token_cache['client_id'] = client_id
         # Refresh a little early (5 min buffer) to avoid mid-call expiry.
-        _oauth_token_cache['expires_at'] = time.time() + data.get('expires_in', 3600) - 300
+        _oauth_token_cache['expires_at'] = time.time() + expires_in - 300
         logger.info("[AUTH] Using Web API override credentials (OAuth) for Spotify metadata/search")
         return _oauth_token_cache['access_token']
 
@@ -80,6 +86,19 @@ def spotify_get_auth_header(token=None):
     if token is not None:
         return {'Authorization': f"Bearer {token.tokens().get('user-read-email')}"}
     return None
+
+
+def spotify_playlist_call(token, url):
+    """Fetch a playlist endpoint, preferring the OAuth override. Client-credentials
+    OAuth can't see private/collaborative playlists (HTTP 404 -> None), so on a
+    permanent failure retry once with the user-scoped librespot token."""
+    headers = spotify_get_auth_header(token)
+    resp = make_call(url, headers=headers, skip_cache=True)
+    if not resp and token is not None:
+        librespot_headers = {'Authorization': f"Bearer {token.tokens().get('user-read-email')}"}
+        if librespot_headers != headers:
+            resp = make_call(url, headers=librespot_headers, skip_cache=True)
+    return resp
 
 
 class MirrorSpotifyPlayback(QObject):
@@ -340,8 +359,9 @@ def spotify_get_artist_album_ids(token, artist_id):
 
 def spotify_get_playlist_data(token, playlist_id):
     logger.info(f"Get playlist data for playlist: {playlist_id}")
-    headers = spotify_get_auth_header(token)
-    resp = make_call(f'{BASE_URL}/playlists/{playlist_id}', headers=headers, skip_cache=True)
+    resp = spotify_playlist_call(token, f'{BASE_URL}/playlists/{playlist_id}')
+    if not resp:
+        raise Exception(f"Failed to fetch playlist data for '{playlist_id}'")
     return resp['name'], resp['owner']['display_name']
 
 
@@ -449,9 +469,9 @@ def spotify_get_playlist_items(token, playlist_id):
 
     while True:
         url = f'{BASE_URL}/playlists/{playlist_id}/tracks?additional_types=track%2Cepisode&offset={offset}&limit={limit}'
-        headers = spotify_get_auth_header(token)
-
-        resp = make_call(url, headers=headers, skip_cache=True)
+        resp = spotify_playlist_call(token, url)
+        if not resp:
+            raise Exception(f"Failed to fetch playlist items for '{playlist_id}'")
 
         offset += limit
         items.extend(resp['items'])
@@ -662,12 +682,19 @@ def spotify_get_track_metadata(token, item_id):
     track_data = {'tracks': [track]}
     time.sleep(delay)
 
-    # The album and artist lookups only enrich the metadata - if they fail
-    # (None on a permanent error) fall back to the data embedded in the track
-    # response so the track is still downloadable.
-    album_data = make_call(f"{BASE_URL}/albums/{track_data.get('tracks', [])[0].get('album', {}).get('id')}", headers=headers) or {}
+    # The album and artist lookups only enrich the metadata (label, copyright,
+    # total discs, genre). If they fail - None on a permanent error, or a raise
+    # on exhausted retries - fall back to the data embedded in the track response
+    # so the track is still downloadable.
+    try:
+        album_data = make_call(f"{BASE_URL}/albums/{track_data.get('tracks', [])[0].get('album', {}).get('id')}", headers=headers) or {}
+    except Exception:
+        album_data = {}
     time.sleep(delay)
-    artist_data = make_call(f"{BASE_URL}/artists/{track_data.get('tracks', [])[0].get('artists', [])[0].get('id')}", headers=headers) or {}
+    try:
+        artist_data = make_call(f"{BASE_URL}/artists/{track_data.get('tracks', [])[0].get('artists', [])[0].get('id')}", headers=headers) or {}
+    except Exception:
+        artist_data = {}
     time.sleep(delay)
     try:
         track_audio_data = make_call(f'{BASE_URL}/audio-features/{item_id}', headers=headers)
@@ -704,7 +731,7 @@ def spotify_get_track_metadata(token, item_id):
         info['image_url'] = ''
         logger.info('Invalid thumbnail')
 
-    info['release_year'] = track_data.get('tracks', [{}])[0].get('album', {}).get('release_date').split("-")[0]
+    info['release_year'] = (track_data.get('tracks', [{}])[0].get('album', {}).get('release_date') or '').split("-")[0]
     #info['track_number'] = track_data.get('tracks', [{}])[0].get('track_number')
     info['track_number'] = track_number
     info['total_tracks'] = track_data.get('tracks', [{}])[0].get('album', {}).get('total_tracks')

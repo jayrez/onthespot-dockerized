@@ -67,61 +67,60 @@ def make_call(url, params=None, headers=None, session=None, skip_cache=False, te
     base_delay = config.get('api_retry_base_delay', 2)
     max_delay = config.get('api_retry_max_delay', 60)
 
-    # The global lock guarantees only one request is in flight at a time. When we
-    # back off after a 429 we hold the lock, so every worker pauses together
-    # instead of independently hammering the API while it is rate limited.
-    with _api_request_lock:
-        for attempt in range(max_retries):
-            try:
+    for attempt in range(max_retries):
+        # The lock serialises only the request dispatch, so a burst of workers
+        # can't hit the rate limit simultaneously. The backoff sleep below happens
+        # OUTSIDE the lock so a single backing-off call doesn't stall every other
+        # worker (and a long Retry-After can't freeze the whole app).
+        try:
+            with _api_request_lock:
                 response = session.get(url, headers=headers, params=params, timeout=30)
+        except requests.exceptions.Timeout:
+            time.sleep(min((2 ** attempt) * base_delay, max_delay))
+            logger.warning(f"Timeout on {url}, retrying (attempt {attempt + 1}/{max_retries})")
+            continue
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request exception on {url}: {str(e)}")
+            return None
 
-                # Rate limited - honour Retry-After if present, else back off.
-                if response.status_code == 429:
-                    retry_after = response.headers.get('Retry-After')
-                    if retry_after and retry_after.isdigit():
-                        delay = int(retry_after) + 1  # 1s buffer
-                        logger.warning(f"Rate limited (429) on {url}. Retry-After: {delay}s. Retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
-                    else:
-                        delay = min((2 ** attempt) * base_delay, max_delay)
-                        logger.warning(f"Rate limited (429) on {url}. No Retry-After header, backing off {delay}s (attempt {attempt + 1}/{max_retries})")
-                    time.sleep(delay)
-                    continue
-
-                # Transient server errors - retry with backoff.
-                elif response.status_code in (500, 502, 503, 504):
-                    delay = min((2 ** attempt) * base_delay, max_delay)
-                    logger.warning(f"Server error ({response.status_code}) on {url}. Retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
-                    time.sleep(delay)
-                    continue
-
-                # Success - cache and return.
-                elif response.status_code == 200:
-                    if not skip_cache:
-                        with open(req_cache_file, 'w', encoding='utf-8') as cf:
-                            cf.write(response.text)
-                    if text:
-                        return response.text
-                    return json.loads(response.text)
-
-                # Permanent client errors - don't retry.
-                else:
-                    logger.info(f"Request status error {response.status_code}: {url}")
-                    return None
-
-            except requests.exceptions.Timeout:
+        # Rate limited - honour Retry-After if present (capped at max_delay), else back off.
+        if response.status_code == 429:
+            retry_after = response.headers.get('Retry-After')
+            if retry_after and retry_after.isdigit():
+                delay = min(int(retry_after) + 1, max_delay)  # 1s buffer, capped
+                logger.warning(f"Rate limited (429) on {url}. Retry-After honoured, waiting {delay}s (attempt {attempt + 1}/{max_retries})")
+            else:
                 delay = min((2 ** attempt) * base_delay, max_delay)
-                logger.warning(f"Timeout on {url}. Retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
-                time.sleep(delay)
-                continue
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Request exception on {url}: {str(e)}")
-                return None
+                logger.warning(f"Rate limited (429) on {url}. No Retry-After header, backing off {delay}s (attempt {attempt + 1}/{max_retries})")
+            time.sleep(delay)
+            continue
 
-        # Retries exhausted - raise so the caller marks the item Failed (and the
-        # retry worker can pick it up later) instead of crashing on a None result.
-        error_msg = f"Max retries ({max_retries}) exhausted for {url}"
-        logger.error(error_msg)
-        raise requests.exceptions.RequestException(error_msg)
+        # Transient server errors - retry with backoff.
+        elif response.status_code in (500, 502, 503, 504):
+            delay = min((2 ** attempt) * base_delay, max_delay)
+            logger.warning(f"Server error ({response.status_code}) on {url}. Retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+            time.sleep(delay)
+            continue
+
+        # Success - cache and return.
+        elif response.status_code == 200:
+            if not skip_cache:
+                with open(req_cache_file, 'w', encoding='utf-8') as cf:
+                    cf.write(response.text)
+            if text:
+                return response.text
+            return json.loads(response.text)
+
+        # Permanent client errors - don't retry.
+        else:
+            logger.info(f"Request status error {response.status_code}: {url}")
+            return None
+
+    # Retries exhausted - raise so the caller marks the item Failed (and the
+    # retry worker can pick it up later) instead of crashing on a None result.
+    error_msg = f"Max retries ({max_retries}) exhausted for {url}"
+    logger.error(error_msg)
+    raise requests.exceptions.RequestException(error_msg)
 
 
 def format_local_id(item_id):
