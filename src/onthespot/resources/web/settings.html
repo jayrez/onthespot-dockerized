@@ -138,9 +138,9 @@
                         Spotify rate-limits OnTheSpot's shared login, which breaks search and downloads.
                         Create your own free app at the
                         <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Spotify Developer Dashboard</a>
-                        (a Premium account is required), set any Redirect URI, then paste the Client ID and
-                        Secret below so Web API calls use your own quota. These are personal &mdash; do not share
-                        them. Leave both empty to use the default login.
+                        (Spotify's Feb 2026 Developer Mode rules may require a Premium account), set any Redirect
+                        URI, then paste the Client ID and Secret below so Web API calls use your own quota. These
+                        are personal &mdash; do not share them. Leave both empty to use the default login.
                     </td>
                 </tr>
                 <tr>
@@ -156,7 +156,7 @@
                         <label for="spotify_webapi_override_client_secret">Spotify Client Secret:</label>
                     </td>
                     <td>
-                        <input type="password" id="spotify_webapi_override_client_secret" value="{{ config.spotify_webapi_override_client_secret }}" placeholder="Leave empty to use the default login">
+                        <input type="password" id="spotify_webapi_override_client_secret" placeholder="{% if config.spotify_webapi_override_client_secret %}Saved &mdash; leave blank to keep{% else %}Leave empty to use the default login{% endif %}">
                     </td>
                 </tr>
             </table>
@@ -940,7 +940,6 @@
                     webui_password: document.getElementById('webui_password').value,
                     // Spotify Web API Override Credentials
                     spotify_webapi_override_client_id: document.getElementById('spotify_webapi_override_client_id').value,
-                    spotify_webapi_override_client_secret: document.getElementById('spotify_webapi_override_client_secret').value,
                     // General Settings
                     explicit_label: document.getElementById('explicit_label').value,
                     download_copy_btn: document.getElementById('download_copy_btn').checked,
@@ -1039,6 +1038,12 @@
                     download_all_available_audio: document.getElementById('download_all_available_audio').checked,
                     download_all_available_subtitles: document.getElementById('download_all_available_subtitles').checked,
                 };
+                // Only send the Spotify secret when the user actually typed one,
+                // so saving with the field left blank keeps the stored secret.
+                const spotifySecret = document.getElementById('spotify_webapi_override_client_secret').value;
+                if (spotifySecret) {
+                    settingsData.spotify_webapi_override_client_secret = spotifySecret;
+                }
                 return settingsData
             }
 

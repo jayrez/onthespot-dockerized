@@ -8,6 +8,7 @@ import subprocess
 import threading
 import time
 from hashlib import md5
+from urllib.parse import urlparse
 from io import BytesIO
 from PIL import Image
 from mutagen.flac import Picture
@@ -19,9 +20,21 @@ from .runtimedata import get_logger, pending, download_queue
 
 logger = get_logger("utils")
 
-# Serialise outgoing API requests across all download/queue workers so that a
-# burst of concurrent calls can't trip Spotify's per-token rate limit (HTTP 429).
-_api_request_lock = threading.Lock()
+# Per-host request locks: serialise dispatch to each API host independently so a
+# burst of concurrent calls to one service can't trip its rate limit, while
+# unrelated services (Apple Music, Bandcamp, Deezer, ...) keep running concurrently.
+_api_host_locks = {}
+_api_host_locks_guard = threading.Lock()
+
+
+def _get_host_lock(url):
+    host = urlparse(url).netloc
+    with _api_host_locks_guard:
+        lock = _api_host_locks.get(host)
+        if lock is None:
+            lock = threading.Lock()
+            _api_host_locks[host] = lock
+        return lock
 
 
 class SSLAdapter(requests.adapters.HTTPAdapter):
@@ -73,7 +86,7 @@ def make_call(url, params=None, headers=None, session=None, skip_cache=False, te
         # OUTSIDE the lock so a single backing-off call doesn't stall every other
         # worker (and a long Retry-After can't freeze the whole app).
         try:
-            with _api_request_lock:
+            with _get_host_lock(url):
                 response = session.get(url, headers=headers, params=params, timeout=30)
         except requests.exceptions.Timeout:
             time.sleep(min((2 ** attempt) * base_delay, max_delay))
@@ -95,21 +108,31 @@ def make_call(url, params=None, headers=None, session=None, skip_cache=False, te
             time.sleep(delay)
             continue
 
-        # Transient server errors - retry with backoff.
-        elif response.status_code in (500, 502, 503, 504):
+        # Transient errors (request timeout + server errors) - retry with backoff.
+        elif response.status_code in (408, 500, 502, 503, 504):
             delay = min((2 ** attempt) * base_delay, max_delay)
-            logger.warning(f"Server error ({response.status_code}) on {url}. Retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+            logger.warning(f"Transient error ({response.status_code}) on {url}. Retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
             time.sleep(delay)
             continue
 
         # Success - cache and return.
         elif response.status_code == 200:
+            if text:
+                if not skip_cache:
+                    with open(req_cache_file, 'w', encoding='utf-8') as cf:
+                        cf.write(response.text)
+                return response.text
+            # Guard against a 200 with a non-JSON body (e.g. an HTML error/captive
+            # portal page) so we return None instead of raising into callers.
+            try:
+                data = json.loads(response.text)
+            except json.JSONDecodeError:
+                logger.error(f"Invalid JSON in 200 response from {url}")
+                return None
             if not skip_cache:
                 with open(req_cache_file, 'w', encoding='utf-8') as cf:
                     cf.write(response.text)
-            if text:
-                return response.text
-            return json.loads(response.text)
+            return data
 
         # Permanent client errors - don't retry.
         else:

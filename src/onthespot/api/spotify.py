@@ -93,11 +93,17 @@ def spotify_playlist_call(token, url):
     OAuth can't see private/collaborative playlists (HTTP 404 -> None), so on a
     permanent failure retry once with the user-scoped librespot token."""
     headers = spotify_get_auth_header(token)
-    resp = make_call(url, headers=headers, skip_cache=True)
+    try:
+        resp = make_call(url, headers=headers, skip_cache=True)
+    except requests.exceptions.RequestException:
+        resp = None
     if not resp and token is not None:
         librespot_headers = {'Authorization': f"Bearer {token.tokens().get('user-read-email')}"}
         if librespot_headers != headers:
-            resp = make_call(url, headers=librespot_headers, skip_cache=True)
+            try:
+                resp = make_call(url, headers=librespot_headers, skip_cache=True)
+            except requests.exceptions.RequestException:
+                resp = None
     return resp
 
 
@@ -558,33 +564,16 @@ def spotify_get_search_results(token, search_term, content_types):
     params['q'] = search_term
     params['type'] = ",".join(c_type for c_type in content_types)
 
-    # Search runs on the UI thread, so retry a couple of times on rate limiting
-    # with a short, capped wait - enough to ride out a transient 429 without
-    # freezing the interface.
-    data = None
-    for attempt in range(3):
-        try:
-            resp = requests.get(f"{BASE_URL}/search", params=params, headers=headers, timeout=30)
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Spotify search request failed for '{search_term}': {str(e)}")
-            return []
-        if resp.status_code == 429:
-            retry_after = resp.headers.get('Retry-After')
-            wait = min(int(retry_after) + 1, 10) if (retry_after and retry_after.isdigit()) else (attempt + 1) * 2
-            logger.warning(f"Search rate limited (429), retrying in {wait}s (attempt {attempt + 1}/3)")
-            time.sleep(wait)
-            continue
-        if resp.status_code != 200:
-            logger.error(f"Spotify search returned status {resp.status_code} for '{search_term}': {resp.text}")
-            return []
-        try:
-            data = resp.json()
-        except ValueError:
-            logger.error(f"Spotify search returned a non-JSON response for '{search_term}'")
-            return []
-        break
+    # Route through make_call so search shares the central 429/Retry-After/backoff
+    # and per-host serialisation. It raises on exhausted retries and returns None
+    # on a permanent error; treat both as "no results" rather than crashing.
+    try:
+        data = make_call(f"{BASE_URL}/search", params=params, headers=headers, skip_cache=True)
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Spotify search failed for '{search_term}': {str(e)}")
+        return []
 
-    # Rate limited on every attempt, or an API error payload (e.g. {'error': ...}).
+    # None/non-dict (permanent error) or an API error payload (e.g. {'error': ...}).
     if not isinstance(data, dict) or 'error' in data:
         logger.error(f"Spotify search did not return results for '{search_term}': {data}")
         return []

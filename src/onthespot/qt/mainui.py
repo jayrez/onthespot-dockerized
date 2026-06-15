@@ -175,7 +175,11 @@ class MainWindow(QMainWindow):
         if not hasattr(self, 'gb2'):
             logger.warning("Settings anchor 'gb2' not found; skipping OAuth override UI")
             return
-        parent_layout = self.gb2.parent().layout()
+        parent = self.gb2.parent()
+        parent_layout = parent.layout() if parent is not None else None
+        if parent_layout is None:
+            logger.warning("Settings anchor 'gb2' has no parent layout; skipping OAuth override UI")
+            return
         gb2_index = None
         for i in range(parent_layout.count()):
             item = parent_layout.itemAt(i)
@@ -196,8 +200,8 @@ class MainWindow(QMainWindow):
             "1. Open the Spotify Developer Dashboard and create an app (Web API).\n"
             "2. Set any Redirect URI, e.g. http://127.0.0.1:8888/callback.\n"
             "3. Copy the Client ID and Client Secret into the fields below, then Save.\n\n"
-            "Note: a Spotify Premium account is required to create an app, and these "
-            "credentials are personal - do not share them."
+            "Note: Spotify's Feb 2026 Developer Mode rules may require a Premium "
+            "account to create an app. These credentials are personal - do not share them."
         ))
         explanation.setWordWrap(True)
         explanation.setStyleSheet("color: #888; margin-bottom: 8px; font-weight: normal;")

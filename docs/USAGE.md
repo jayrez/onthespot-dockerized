@@ -36,13 +36,14 @@ OnTheSpot supports various accounts and instructions for each are listed below, 
 - **Spotify**: Ensure that both OnTheSpot and the Spotify Desktop App are not restricted by a firewall or vpn so that they can communicate. Click add account and then head over to devices in the Spotify app. Under devices you should see 'OnTheSpot', select it. Once complete the app will prompt you to restart.
 
    > [!IMPORTANT]
-   > **Spotify Web API credentials are now required for search and downloads.**
-   > Spotify rate-limits the shared login that OnTheSpot uses for its Web API
-   > (search and metadata) calls, returning `HTTP 429` errors. To work around
-   > this, add your own free Spotify app credentials so those calls run on your
-   > own quota:
+   > **Spotify Web API credentials are strongly recommended** (and in practice
+   > required if you hit rate limits). Spotify rate-limits the shared login that
+   > OnTheSpot uses for its Web API (search and metadata) calls, returning
+   > `HTTP 429` errors. Adding your own free Spotify app credentials runs those
+   > calls on your own quota. If you leave the fields empty, OnTheSpot falls back
+   > to the default shared login (which is frequently rate-limited):
    >
-   > 1. Open the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and log in (a **Premium** account is required to create an app).
+   > 1. Open the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and log in. Spotify's Feb 2026 Developer Mode rules may require a **Premium** account to create an app.
    > 2. Click **Create app**. Give it any name/description, set the **Redirect URI** to `http://127.0.0.1:8888/callback`, tick **Web API**, and save.
    > 3. Open the app's **Settings** and copy the **Client ID** and **Client Secret**.
    > 4. Add the credentials in OnTheSpot:
