@@ -5,6 +5,8 @@ import platform
 import requests
 import ssl
 import subprocess
+import threading
+import time
 from hashlib import md5
 from io import BytesIO
 from PIL import Image
@@ -16,6 +18,10 @@ from .otsconfig import config
 from .runtimedata import get_logger, pending, download_queue
 
 logger = get_logger("utils")
+
+# Serialise outgoing API requests across all download/queue workers so that a
+# burst of concurrent calls can't trip Spotify's per-token rate limit (HTTP 429).
+_api_request_lock = threading.Lock()
 
 
 class SSLAdapter(requests.adapters.HTTPAdapter):
@@ -54,18 +60,68 @@ def make_call(url, params=None, headers=None, session=None, skip_cache=False, te
         ctx.verify_mode = ssl.CERT_REQUIRED
         session.mount('https://', SSLAdapter(ssl_context=ctx))
 
-    response = session.get(url, headers=headers, params=params)
+    # Retry logic with exponential backoff for transient failures (rate limits,
+    # server errors, timeouts). Permanent client errors (e.g. 401/403/404) are
+    # returned as None without retrying.
+    max_retries = config.get('api_retry_max_attempts', 3)
+    base_delay = config.get('api_retry_base_delay', 2)
+    max_delay = config.get('api_retry_max_delay', 60)
 
-    if response.status_code == 200:
-        if not skip_cache:
-            with open(req_cache_file, 'w', encoding='utf-8') as cf:
-                cf.write(response.text)
-        if text:
-            return response.text
-        return json.loads(response.text)
-    else:
-        logger.info(f"Request status error {response.status_code}: {url}")
-        return None
+    # The global lock guarantees only one request is in flight at a time. When we
+    # back off after a 429 we hold the lock, so every worker pauses together
+    # instead of independently hammering the API while it is rate limited.
+    with _api_request_lock:
+        for attempt in range(max_retries):
+            try:
+                response = session.get(url, headers=headers, params=params, timeout=30)
+
+                # Rate limited - honour Retry-After if present, else back off.
+                if response.status_code == 429:
+                    retry_after = response.headers.get('Retry-After')
+                    if retry_after and retry_after.isdigit():
+                        delay = int(retry_after) + 1  # 1s buffer
+                        logger.warning(f"Rate limited (429) on {url}. Retry-After: {delay}s. Retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                    else:
+                        delay = min((2 ** attempt) * base_delay, max_delay)
+                        logger.warning(f"Rate limited (429) on {url}. No Retry-After header, backing off {delay}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(delay)
+                    continue
+
+                # Transient server errors - retry with backoff.
+                elif response.status_code in (500, 502, 503, 504):
+                    delay = min((2 ** attempt) * base_delay, max_delay)
+                    logger.warning(f"Server error ({response.status_code}) on {url}. Retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(delay)
+                    continue
+
+                # Success - cache and return.
+                elif response.status_code == 200:
+                    if not skip_cache:
+                        with open(req_cache_file, 'w', encoding='utf-8') as cf:
+                            cf.write(response.text)
+                    if text:
+                        return response.text
+                    return json.loads(response.text)
+
+                # Permanent client errors - don't retry.
+                else:
+                    logger.info(f"Request status error {response.status_code}: {url}")
+                    return None
+
+            except requests.exceptions.Timeout:
+                delay = min((2 ** attempt) * base_delay, max_delay)
+                logger.warning(f"Timeout on {url}. Retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(delay)
+                continue
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Request exception on {url}: {str(e)}")
+                return None
+
+        # Retries exhausted - raise so the caller marks the item Failed (and the
+        # retry worker can pick it up later) instead of crashing on a None result.
+        error_msg = f"Max retries ({max_retries}) exhausted for {url}"
+        logger.error(error_msg)
+        raise requests.exceptions.RequestException(error_msg)
 
 
 def format_local_id(item_id):

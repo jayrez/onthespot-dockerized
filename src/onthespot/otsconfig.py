@@ -110,6 +110,12 @@ class Config:
             "rotate_active_account_number": False, # Rotate active account for parsing and downloading tracks
             "download_delay": 3, # Seconds to wait before next download attempt
             "download_chunk_size": 50000, # Chunk size in bytes to download in
+            "api_request_delay": 0.1, # Seconds to wait between consecutive metadata API calls to avoid rate limiting
+            "api_retry_max_attempts": 3, # Max attempts for a metadata API call before giving up (handles 429/5xx)
+            "api_retry_base_delay": 2, # Base seconds for exponential backoff between API retries
+            "api_retry_max_delay": 60, # Maximum seconds to wait for a single API retry backoff
+            "spotify_webapi_override_client_id": "", # Optional: your own Spotify app Client ID for Web API calls (avoids shared-client 429 rate limits)
+            "spotify_webapi_override_client_secret": "", # Optional: your own Spotify app Client Secret (used with the Client ID above)
             "maximum_queue_workers": 1, # Maximum number of queue workers
             "maximum_download_workers": 1, # Maximum number of download workers
             "enable_retry_worker": False, # Enable retry worker, automatically retries failed downloads after a set time
@@ -241,6 +247,9 @@ class Config:
             '/usr/local/bin/ffmpeg', #MACOS INTEL
             os.path.join(self.app_root, 'bin', 'ffmpeg', 'ffmpeg' + self.ext_) #BUNDLED
         ]
+        # Initialise before the loop so that a no-match doesn't raise
+        # UnboundLocalError on the `if not ffmpeg_path` check below.
+        ffmpeg_path = ''
         for path in ffmpeg_path_candidates:
             if os.path.isfile(path) and os.access(path, os.X_OK):
                 ffmpeg_path = path

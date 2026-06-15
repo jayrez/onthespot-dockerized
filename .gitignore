@@ -140,3 +140,8 @@ dmypy.json
 .markdownlintignore
 .markdownlint.json
 .vscode
+
+# Local Spotify fix testing (do not commit)
+spotify_creds.txt
+debug_*.py
+run_dev.ps1
