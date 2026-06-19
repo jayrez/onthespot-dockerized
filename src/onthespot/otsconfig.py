@@ -106,6 +106,7 @@ class Config:
             "raw_media_download": False,  # Skip media conversion and metadata writing
             "rotate_active_account_number": False,  # Rotate active account for parsing and downloading tracks
             "download_delay": 3,  # Seconds to wait before next download attempt
+            "download_delay_variance": 1,
             "download_chunk_size": 50000,  # Chunk size in bytes to download in
             "api_request_delay": 0.1,  # Seconds to wait between consecutive metadata API calls to avoid rate limiting
             "api_retry_max_attempts": 3,  # Max attempts for a metadata API call before giving up (handles 429/5xx)
