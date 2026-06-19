@@ -339,24 +339,32 @@ class Config:
 
     def migration(self):
         try:
-            #very old migration, not really used anymore throw error if version isn't numeric only
-            if int(self.get("version").replace("v", "").replace(".", "")) < int(
-                self.__template_data.get("version").replace("v", "").replace(".", "")
+            # very old migration, not really used anymore throw error if version isn't numeric only
+            if int(
+                self.get("version")
+                .replace("v", "")
+                .replace(".", "")
+                .replace("beta", "")
+            ) < int(
+                self.__template_data.get("version")
+                .replace("v", "")
+                .replace(".", "")
+                .replace("beta", "")
             ):
                 old_config_path = os.path.join(config_dir(), "config.json")
                 if os.path.exists(old_config_path):
                     os.remove(old_config_path)
-    
+
                 # Migration (>v1.0.3)
                 if isinstance(self.get("file_hertz"), str):
                     self.set("file_hertz", int(self.get("file_hertz")))
-    
+
                 # Migration (>v1.0.4)
                 if self.get("theme") == "dark":
                     self.set("theme", f"background-color: #282828; color: white;")
                 elif self.get("theme") == "light":
                     self.set("theme", f"background-color: white; color: black;")
-    
+
                 # Migration (>v1.0.5)
                 cfg_copy = self.get("accounts").copy()
                 for account in cfg_copy:
@@ -364,9 +372,17 @@ class Config:
                         account["uuid"] = "public_youtube_music"
                         account["service"] = "youtube_music"
                 self.set("accounts", cfg_copy)
-    
+
                 # Migration (>v1.0.7)
-                if int(self.get("version").replace("v", "").replace(".", "")) < 110:
+                if (
+                    int(
+                        self.get("version")
+                        .replace("v", "")
+                        .replace(".", "")
+                        .replace("beta", "")
+                    )
+                    < 110
+                ):
                     updated_keys = [
                         ("active_account_number", "parsing_acc_sn"),
                         ("thumbnail_size", "search_thumb_height"),
@@ -394,10 +410,10 @@ class Config:
                         if value:
                             self.set(key[0], value)
                             self.__config.pop(key[1])
-    
+
                 self.set("version", self.__template_data.get("version"))
                 self.save()
-        except Exception:
+        except ValueError:
             pass
 
         # Language
