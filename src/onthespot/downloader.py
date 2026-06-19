@@ -592,7 +592,7 @@ class DownloadWorker(QObject):
         raise ValueError(f"No download handler for service '{service}'")
 
     def _download_spotify(self, item, item_id, item_type, token, temp_path):
-        default_format = ".ogg"
+        default_format = ""
         temp_path += default_format
 
         if item_type == "track":
