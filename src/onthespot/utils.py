@@ -239,9 +239,15 @@ def translate(string):
 
 def conv_list_format(items):
     """Join *items* with the configured metadata separator string."""
-    if len(items) == 0:
+    try:
+        if len(items) == 0:
+            return ""
+        return (config.get("metadata_separator")).join(items)
+    except TypeError:
+        logger.error(
+            f"Error converting items list for items: {items}, separator: {config.get('metadata_separator')}"
+        )
         return ""
-    return (config.get("metadata_separator")).join(items)
 
 
 def format_item_path(item, item_metadata):
