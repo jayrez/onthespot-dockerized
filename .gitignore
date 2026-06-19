@@ -10,6 +10,7 @@ __pycache__/
 ffbin_*/
 .Python
 build/
+builder/
 develop-eggs/
 dist/
 downloads/
@@ -141,6 +142,8 @@ dmypy.json
 .markdownlint.json
 .vscode
 
+# Mac OSX
+.DS_Store
 # Local Spotify fix testing (do not commit)
 spotify_creds.txt
 debug_*.py
