@@ -172,17 +172,21 @@ def format_local_id(item_id):
 # ---------------------------------------------------------------------------
 
 
+def _version_to_int(version):
+    match = re.match(r"[\d.]+", str(version).lower().lstrip("v"))
+    digits = match.group(0).replace(".", "") if match else ""
+    return int(digits) if digits else 0
+
+
 def is_latest_release():
     """Return ``True`` if the running version is the latest GitHub release."""
     url = "https://api.github.com/repos/justin025/onthespot/releases/latest"
     response = requests.get(url)
     if response.status_code == 200:
-        current_version = config.get("version").replace("v", "").replace(".", "")
-        latest_version = response.json()["name"].replace("v", "").replace(".", "")
-        if int(latest_version) > int(current_version):
-            logger.info(
-                f"Update Available: {int(latest_version)} > {int(current_version)}"
-            )
+        current_version = _version_to_int(config.get("version"))
+        latest_version = _version_to_int(response.json()["name"])
+        if latest_version > current_version:
+            logger.info(f"Update Available: {latest_version} > {current_version}")
             return False
     return True
 
@@ -1017,3 +1021,4 @@ def format_bytes(size):
         size /= 1024
         index += 1
     return f"{size:.2f} {units[index]}"
+
