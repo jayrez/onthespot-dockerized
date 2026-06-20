@@ -414,9 +414,11 @@ def spotify_re_init_session(account, dead_session=None):
 def spotify_get_token(parsing_index):
     try:
         token = account_pool[parsing_index]["login"]["session"]
-    except (OSError, AttributeError):
+    except (OSError, AttributeError, KeyError):
+        token = None
+    if not token or isinstance(token, str):
         logger.info(
-            f"Failed to retreive token for {account_pool[parsing_index]['username']}, attempting to reinit session."
+            f"No valid session for {account_pool[parsing_index]['username']}, attempting to reinit session."
         )
         spotify_re_init_session(account_pool[parsing_index])
         token = account_pool[parsing_index]["login"]["session"]
@@ -1090,4 +1092,3 @@ def spotify_get_podcast_episode_ids(token, show_id):
         if episode:
             item_ids.append(episode["id"])
     return item_ids
-
