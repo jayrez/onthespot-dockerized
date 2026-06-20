@@ -19,6 +19,7 @@ DownloadWorker
 """
 
 import os
+import queue
 import random
 import re
 import requests
@@ -591,6 +592,18 @@ class DownloadWorker(QObject):
 
         raise ValueError(f"No download handler for service '{service}'")
 
+    def _reinit_spotify_session(self, token):
+        from .api.spotify import spotify_re_init_session
+
+        for account in account_pool:
+            if (
+                account.get("service") == "spotify"
+                and account.get("login", {}).get("session") is token
+            ):
+                logger.info("Spotify session connection lost, re-initializing...")
+                spotify_re_init_session(account, dead_session=token)
+                return
+
     def _download_spotify(self, item, item_id, item_type, token, temp_path):
         default_format = ""
         temp_path += default_format
@@ -606,9 +619,14 @@ class DownloadWorker(QObject):
             quality = AudioQuality.VERY_HIGH
             bitrate = "320k"
 
-        stream = token.content_feeder().load(
-            audio_key, VorbisOnlyAudioQuality(quality), False, None
-        )
+        try:
+            stream = token.content_feeder().load(
+                audio_key, VorbisOnlyAudioQuality(quality), False, None
+            )
+        except (queue.Empty, RuntimeError) as exc:
+            self._reinit_spotify_session(token)
+            raise RuntimeError(f"Spotify session connection lost: {exc}") from exc
+
         total_size = stream.input_stream.size
         downloaded = 0
 
@@ -1227,3 +1245,4 @@ class DownloadWorker(QObject):
         return max(
             0, config.get("download_delay") + random.randint(-variance, variance)
         )
+
