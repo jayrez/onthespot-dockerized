@@ -83,6 +83,10 @@ logger = get_logger("downloader")
 _MAX_PATH_LENGTH = 260
 
 
+class TrackUnavailableError(Exception):
+    """Raised when a track has no playable version (not a connection issue)."""
+
+
 class RetryWorker(QObject):
     """Periodically resets failed download-queue items back to *Waiting*.
 
@@ -314,6 +318,13 @@ class DownloadWorker(QObject):
                         temp_path,
                         file_path,
                     )
+                except TrackUnavailableError:
+                    logger.error(f"Track is unavailable, track id '{item_id}'")
+                    item["item_status"] = ItemStatus.UNAVAILABLE
+                    if self.gui:
+                        self.progress.emit(item, self.tr("Unavailable"), 0)
+                    self._requeue_item(item)
+                    continue
                 except RuntimeError as exc:
                     logger.info(
                         f"Download failed (likely rate limited): {item}, Error: {exc}\n{traceback.format_exc()}"
@@ -623,7 +634,12 @@ class DownloadWorker(QObject):
             stream = token.content_feeder().load(
                 audio_key, VorbisOnlyAudioQuality(quality), False, None
             )
-        except (queue.Empty, RuntimeError) as exc:
+        except RuntimeError as exc:
+            if "alternative track" in str(exc).lower():
+                raise TrackUnavailableError(item_id) from exc
+            self._reinit_spotify_session(token)
+            raise RuntimeError(f"Spotify session connection lost: {exc}") from exc
+        except queue.Empty as exc:
             self._reinit_spotify_session(token)
             raise RuntimeError(f"Spotify session connection lost: {exc}") from exc
 
@@ -1245,4 +1261,3 @@ class DownloadWorker(QObject):
         return max(
             0, config.get("download_delay") + random.randint(-variance, variance)
         )
-
