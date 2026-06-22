@@ -4723,6 +4723,99 @@
                        </property>
                       </widget>
                      </item>
+                    </layout>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <widget class="QGroupBox" name="gb3_5">
+                 <property name="title">
+                  <string/>
+                 </property>
+                 <property name="flat">
+                  <bool>true</bool>
+                 </property>
+                 <layout class="QHBoxLayout" name="horizontalLayout_10">
+                  <item>
+                   <widget class="QGroupBox" name="group_playlist_cfg_m3u_17">
+                    <property name="title">
+                     <string/>
+                    </property>
+                    <layout class="QHBoxLayout" name="horizontalLayout_107">>
+                     <item>
+                      <widget class="QCheckBox" name="v2a_enable">
+                       <property name="toolTip">
+                        <string/>
+                       </property>
+                       <property name="layoutDirection">
+                        <enum>Qt::RightToLeft</enum>
+                       </property>
+                       <property name="text">
+                        <string>Enable Video2Audio for generic</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item>
+                      <widget class="QLabel" name="v2a_pref_codec">
+                       <property name="text">
+                        <string>Preferred Codec</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item>
+                     <widget class="QLineEdit" name="v2a_preferred_codec"/>
+                     </item>
+                     <item>
+                        <widget class="QGroupBox" name="group_playlist_cfg_m3u_20">
+                           <property name="title">
+                              <string/>
+                           </property>
+                           <layout class="QHBoxLayout" name="horizontalLayout_250">
+                        <item>
+                        <widget class="QLabel" name="lb_preferred_v2a_bitrate">
+                        <property name="text">
+                           <string>Preferred Bitrate</string>
+                        </property>
+                        </widget>
+                        </item>
+                        <item>
+                        <spacer name="horizontalSpacer_22">
+                        <property name="orientation">
+                           <enum>Qt::Horizontal</enum>
+                        </property>
+                        <property name="sizeHint" stdset="0">
+                           <size>
+                           <width>40</width>
+                           <height>20</height>
+                           </size>
+                        </property>
+                        </spacer>
+                        </item>
+                        <item>
+                        <widget class="QSpinBox" name="v2a_preferred_bitrate">
+                        <property name="minimumSize">
+                           <size>
+                           <width>0</width>
+                           <height>0</height>
+                           </size>
+                        </property>
+                        <property name="autoFillBackground">
+                           <bool>false</bool>
+                        </property>
+                        <property name="minimum">
+                           <number>0</number>
+                        </property>
+                        <property name="maximum">
+                           <number>10000000</number>
+                        </property>
+                        </widget>
+                        </item>
+                     </layout>
+                        </widget>
+                     </item>
+                     
                      <item>
                       <spacer name="horizontalSpacer_31">
                        <property name="orientation">

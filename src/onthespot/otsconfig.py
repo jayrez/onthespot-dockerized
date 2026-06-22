@@ -244,6 +244,9 @@ class Config:
             "preferred_subtitle_language": "en-US",
             "download_all_available_audio": False,
             "download_all_available_subtitles": False,
+            "v2a_enable": False,
+            "v2a_preferred_codec": "mp3",
+            "v2a_preferred_bitrate": 192,
         }
         # Load Config
         if os.path.isfile(self.__cfg_path):

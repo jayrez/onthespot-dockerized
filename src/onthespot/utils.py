@@ -20,6 +20,7 @@ import json
 import os
 import platform
 import requests
+import re
 import ssl
 import subprocess
 import threading
@@ -908,7 +909,9 @@ def set_music_thumbnail(filename, metadata):
                         creationflags=subprocess.CREATE_NO_WINDOW,
                     )
                 else:
-                    subprocess.check_call(command, shell=False, stdin=subprocess.DEVNULL)
+                    subprocess.check_call(
+                        command, shell=False, stdin=subprocess.DEVNULL
+                    )
 
             elif config.get("embed_cover") and filetype == ".ogg":
                 with open(image_path, "rb") as image_file:

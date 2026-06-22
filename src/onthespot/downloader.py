@@ -598,6 +598,11 @@ class DownloadWorker(QObject):
             return "", "", video_files
 
         if service == "generic":
+            if config.get("v2a_enable", False) is True:
+                item_codec, item_bitrate = self._download_generic_v2a(
+                    item, item_id, temp_path
+                )
+                return item_codec, str(item_bitrate), []
             self._download_generic(item, item_id, temp_path)
             return "", "", []
 
@@ -1130,6 +1135,7 @@ class DownloadWorker(QObject):
 
     def _download_generic(self, item, item_id, temp_path):
         """Download using yt-dlp's generic extractor (any URL)."""
+
         ydl_opts = {
             "format": (
                 f"(bestvideo[height<={config.get('preferred_video_resolution')}][ext=mp4]+bestaudio[ext=m4a])/"
@@ -1143,6 +1149,7 @@ class DownloadWorker(QObject):
             "ffmpeg_location": config.get("_ffmpeg_bin_path"),
             "postprocessors": [{"key": "FFmpegMetadata"}],
         }
+
         if self.gui:
             ydl_opts["progress_hooks"] = [lambda d: self._yt_dlp_progress_hook(item, d)]
 
@@ -1150,6 +1157,40 @@ class DownloadWorker(QObject):
             info = downloader.extract_info(item_id, download=False)
             item["file_path"] = downloader.prepare_filename(info)
             downloader.download(item_id)
+
+    def _download_generic_v2a(self, item, item_id, temp_path):
+        """Download using yt-dlp's generic extractor (any URL) but extracts only audio"""
+
+        ydl_opts = {
+            "format": (
+                f"(bestvideo[height<={config.get('preferred_video_resolution')}][ext=mp4]+bestaudio[ext=m4a])/"
+                f"(bestvideo[height<={config.get('preferred_video_resolution')}]+bestaudio)/"
+                f"best"
+            ),
+            "quiet": True,
+            "no_warnings": True,
+            "noprogress": True,
+            "outtmpl": config.get("video_download_path") + os.sep + "%(title)s.%(ext)s",
+            "ffmpeg_location": config.get("_ffmpeg_bin_path"),
+            "postprocessors": [
+                {"key": "FFmpegMetadata"},
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": config.get("v2a_preferred_codec"),
+                    "preferredquality": config.get("v2a_preferred_bitrate"),
+                },
+            ],
+        }
+
+        if self.gui:
+            ydl_opts["progress_hooks"] = [lambda d: self._yt_dlp_progress_hook(item, d)]
+
+        with YoutubeDL(ydl_opts) as downloader:
+            info = downloader.extract_info(item_id, download=False)
+            item["file_path"] = downloader.prepare_filename(info)
+            downloader.download(item_id)
+
+        return config.get("v2a_preferred_codec"), config.get("v2a_preferred_bitrate")
 
     # ------------------------------------------------------------------
     # Post-processing helpers

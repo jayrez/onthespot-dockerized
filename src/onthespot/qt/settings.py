@@ -25,10 +25,14 @@ def load_config(self):
     )
 
     # Spotify Web API override credentials (programmatically added in mainui)
-    if hasattr(self, 'spotify_webapi_override_client_id'):
-        self.spotify_webapi_override_client_id.setText(config.get('spotify_webapi_override_client_id', ''))
-    if hasattr(self, 'spotify_webapi_override_client_secret'):
-        self.spotify_webapi_override_client_secret.setText(config.get('spotify_webapi_override_client_secret', ''))
+    if hasattr(self, "spotify_webapi_override_client_id"):
+        self.spotify_webapi_override_client_id.setText(
+            config.get("spotify_webapi_override_client_id", "")
+        )
+    if hasattr(self, "spotify_webapi_override_client_secret"):
+        self.spotify_webapi_override_client_secret.setText(
+            config.get("spotify_webapi_override_client_secret", "")
+        )
 
     # Dev Tools
     self.settings_scrollarea_value.valueChanged.connect(
@@ -293,13 +297,24 @@ def load_config(self):
         config.get("download_all_available_subtitles")
     )
 
+    # Video 2 Audio Settings
+    self.v2a_enable.setChecked(config.get("v2a_enable"))
+    self.v2a_preferred_codec.setText(config.get("v2a_preferred_codec"))
+    self.v2a_preferred_bitrate.setValue(config.get("v2a_preferred_bitrate"))
+
 
 def save_config(self):
     # Spotify Web API override credentials (programmatically added in mainui)
-    if hasattr(self, 'spotify_webapi_override_client_id'):
-        config.set('spotify_webapi_override_client_id', self.spotify_webapi_override_client_id.text().strip())
-    if hasattr(self, 'spotify_webapi_override_client_secret'):
-        config.set('spotify_webapi_override_client_secret', self.spotify_webapi_override_client_secret.text().strip())
+    if hasattr(self, "spotify_webapi_override_client_id"):
+        config.set(
+            "spotify_webapi_override_client_id",
+            self.spotify_webapi_override_client_id.text().strip(),
+        )
+    if hasattr(self, "spotify_webapi_override_client_secret"):
+        config.set(
+            "spotify_webapi_override_client_secret",
+            self.spotify_webapi_override_client_secret.text().strip(),
+        )
     # General Settings
     config.set("language_index", self.language.currentIndex())
     config.set("explicit_label", self.explicit_label.text())
@@ -480,5 +495,10 @@ def save_config(self):
         "download_all_available_subtitles",
         self.download_all_available_subtitles.isChecked(),
     )
+
+    # Video 2 Audio Settings
+    config.set("v2a_enable", self.v2a_enable.isChecked())
+    config.set("v2a_preferred_codec", self.v2a_preferred_codec.text())
+    config.set("v2a_preferred_bitrate", self.v2a_preferred_bitrate.value())
 
     config.save()
