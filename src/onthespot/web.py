@@ -418,9 +418,8 @@ def main():
 
     fill_account_pool.start()
 
-    thread = threading.Thread(target=parsingworker)
-    thread.daemon = True
-    thread.start()
+    parsing_worker = ParsingWorker()
+    parsing_worker.start()
 
     for _ in range(config.get("maximum_queue_workers")):
         queue_worker = QueueWorker()
@@ -475,4 +474,6 @@ if __name__ == "__main__":
 
 
 if __name__ == '__main__':
+    main()
+ame__ == '__main__':
     main()
