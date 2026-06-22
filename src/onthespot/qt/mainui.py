@@ -136,17 +136,13 @@ class QueueWorker(QObject):
                     local_id = next(iter(pending))
                     with pending_lock:
                         item = pending.pop(local_id)
-                    token = get_account_token(item["item_service"])
-                    item_metadata = globals()[
-                        f"{item['item_service']}_get_{item['item_type']}_metadata"
-                    ](token, item["item_id"])
-                    if item_metadata:
-                        self.add_item_to_download_list.emit(item, item_metadata)
-                        # Padding for 'GLib-ERROR : Creating pipes for GWakeup: Too many open files Trace/breakpoint trap'
-                        # when mass downloading cached responses with download queue thumbnails enabled.
-                        if config.get("show_download_thumbnails"):
-                            time.sleep(0.1)
-                    continue
+
+                    self.add_item_to_download_list.emit(item, {})
+                    # Padding for 'GLib-ERROR : Creating pipes for GWakeup: Too many open files Trace/breakpoint trap'
+                    # when mass downloading cached responses with download queue thumbnails enabled.
+                    if config.get("show_download_thumbnails"):
+                        time.sleep(0.1)
+
                 except Exception as e:
                     error_msg = f"Unknown Exception for {item}: {str(e)}"
                     logger.error(f"{error_msg}\nTraceback: {traceback.format_exc()}")
@@ -883,10 +879,6 @@ class MainWindow(QMainWindow):
         logger.info("Accounts table was populated !")
 
     def add_item_to_download_list(self, item, item_metadata):
-        # Check if this is a failed metadata fetch
-        is_metadata_fetch_failure = not item_metadata.get(
-            "is_playable", True
-        ) and "[FAILED]" in item_metadata.get("title", "")
 
         # Skip rendering QButtons if they are not in use
         copy_btn = None
@@ -952,11 +944,7 @@ class MainWindow(QMainWindow):
             delete_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             delete_btn.hide()
 
-        item_by = (
-            item_metadata.get("artists")
-            if item_metadata.get("artists")
-            else item_metadata.get("show_name")
-        )
+        item_by = "ND"
 
         playlist_name = ""
         playlist_by = ""
@@ -965,16 +953,9 @@ class MainWindow(QMainWindow):
             playlist_name = item.get("playlist_name")
             playlist_by = item.get("playlist_by")
         elif item["parent_category"] in ("album", "show"):
-            parent_name = (
-                item_metadata.get("album_name")
-                if item_metadata.get("album_name")
-                else item_metadata.get("show_name")
-            )
-            item_category = f"{item['parent_category'].title()}: {parent_name}"
+            item_category = f"{item['parent_category'].title()}"
         else:
-            item_category = (
-                f"{item['parent_category'].title()}: {item_metadata['title']}"
-            )
+            item_category = f"{item['parent_category'].title()}"
 
         item_service = item["item_service"]
         service_label = QTableWidgetItem(str(item_service).replace("_", " ").title())
@@ -998,18 +979,12 @@ class MainWindow(QMainWindow):
 
         rows = self.tbl_dl_progress.rowCount()
         self.tbl_dl_progress.insertRow(rows)
-        if item_metadata.get("explicit"):
-            title = config.get("explicit_label") + " " + item_metadata.get("title")
-        else:
-            title = item_metadata.get("title")
-        if config.get("show_download_thumbnails") and item_metadata.get("image_url"):
-            self.tbl_dl_progress.setRowHeight(rows, config.get("thumbnail_size"))
-            item_label = LabelWithThumb(title, item_metadata.get("image_url"))
-        else:
-            item_label = QLabel(self.tbl_dl_progress)
-            item_label.setText(title)
-            item_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-            item_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        title = "ND"
+
+        item_label = QLabel(self.tbl_dl_progress)
+        item_label.setText(title)
+        item_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        item_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         item_label.setStyleSheet("background-color: transparent;")
 
         # Add To List
@@ -1052,16 +1027,6 @@ class MainWindow(QMainWindow):
                     },
                 },
             }
-
-            # If this was a metadata fetch failure, immediately set status to Failed
-            if is_metadata_fetch_failure:
-                download_queue[item["local_id"]]["item_status"] = "Failed"
-                status_label.setText(self.tr("Failed"))
-                pbar.setValue(0)
-                cancel_btn.hide()
-                retry_btn.show()
-                if copy_btn:
-                    copy_btn.show()
 
     def update_item_in_download_list(self, item, status, progress):
         self.statistics.setText(
