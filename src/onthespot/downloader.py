@@ -1137,15 +1137,13 @@ class DownloadWorker(QObject):
         """Convert, tag, thumbnail, and optionally add to M3U."""
         # Verify temp file is valid before post-processing
         if not os.path.exists(temp_path) or os.path.getsize(temp_path) < 4096:
+            size = os.path.getsize(temp_path) if os.path.exists(temp_path) else 0
             logger.error(
-                f"Downloaded temp file is missing or too small ({os.path.getsize(temp_path) if os.path.exists(temp_path) else 0} bytes): {temp_path}"
+                f"Downloaded temp file is missing or too small ({size} bytes): {temp_path}"
             )
             if os.path.exists(temp_path):
                 os.remove(temp_path)
-            item["item_status"] = ItemStatus.FAILED
-            if self.gui:
-                self.progress.emit(item, self.tr("Failed"), 100)
-            return
+            raise RuntimeError(f"Corrupt or incomplete download detected ({size} bytes)")
 
         # Lyrics
         lyrics_fn = SERVICE_LYRICS_FUNCTIONS.get(service)
