@@ -330,7 +330,8 @@ def format_item_path(item, item_metadata):
         episode_number=item_metadata.get("episode_number", 1)
         if not config.get("use_double_digit_path_numbers")
         else str(item_metadata.get("episode_number", 1)).zfill(2),
-    )
+    # Clean up any duplicate consecutive slashes from empty fields
+    item_path = re.sub(r"/+", "/", item_path)
 
     return item_path
 
