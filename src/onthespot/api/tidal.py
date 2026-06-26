@@ -347,9 +347,11 @@ def tidal_get_lyrics(token, item_id, item_type, metadata, filepath):
     if config.get("download_lyrics"):
         headers = {}
         headers["Authorization"] = f"Bearer {token['access_token']}"
+        headers["X-Tidal-Token"] = CLIENT_ID
 
         params = {}
         params["countryCode"] = token["country_code"]
+        params["locale"] = "en_US"
 
         lyrics = []
 
