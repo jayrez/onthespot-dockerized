@@ -287,8 +287,8 @@ def format_item_path(item, item_metadata):
 
     # Split composer
     composer_full = item_metadata.get("composer", "")
-    composer = sanitize_data(get_primary_composer(composer_full))
-
+    primary_composer = get_primary_composer(composer_full)
+    
     item_path = path.format(
         # Universal
         service=sanitize_data(item.get("item_service")).title(),
@@ -300,7 +300,7 @@ def format_item_path(item, item_metadata):
         ),
         # Audio
         artist=sanitize_data(item_metadata.get("artists")),
-        composer=composer,
+        composer=sanitize_data(primary_composer),
         album=sanitize_data(album),
         album_artist=sanitize_data(item_metadata.get("album_artists")),
         album_type=item_metadata.get("album_type", "single").title(),
